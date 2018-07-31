@@ -1,0 +1,124 @@
+1 _riverStatus Import_fail 
+
+问题描述： 发现有个索引的数据同步不完整，在 http://192.168.1.17:9200/_plugin/head/ 在browse - river里看到 _riverStatus Import_fail
+
+查看 elasticsearch 的log发现 有几条数据由于异常造成同步失败，处理好数据好重新建索引数据同步正常。
+2 es_rejected_execution_exception <429>
+
+此异常主要是因为请求数过多，es的线程池不够用了。
+
+默认bulk thead pool set  queue capacity =50 这个可以设置大点
+
+打开 elasticsearch.yml 在末尾加上 
+
+threadpool:
+    bulk:
+        type: fixed
+        size: 60
+        queue_size: 1000
+
+重新启动服务即可
+
+另：
+
+--查看线程池设置--
+curl -XGET "http://localhost:9200/_nodes/thread_pool/"
+
+
+非bulk入库thread pool设置可以这样修改
+threadpool:
+    index:
+        type: fixed
+        size: 30
+        queue_size: 1000
+
+关于该异常，有网友给的解释挺好的：
+复制代码
+
+Elasticsearch has a thread pool and a queue for search per node. A thread pool will have N number of workers ready to handle the requests. When a request comes and if a worker is free , this is handled by the worker. Now by default the number of workers is equal to the number of cores on that CPU. When the workers are full and there are more search requests , the request will go to queue. The size of queue is also limited. Its by default size is say 100 and if there happens more parallel requests than this , then those requests would be rejected as you can see in the error log.
+
+The solution to this would be to -
+
+1.    Increase the size of queue or threadpool - The immediate solution for this would be to increase the size of the search queue. We can also increase the size of threadpool , but then that might badly effect the performance of individual queries. So increasing the queue might be a good idea. But then remember that this queue is memory residential and increasing the queue size too much can result in Out Of Memory issues. You can get more info on the same here.
+2.    Increase number of nodes and replicas - Remember each node has its own search threadpool/queue. Also search can happen on primary shard OR replica.
+
+复制代码
+
+关于thread pool，可参看：https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-threadpool.html
+3 create_failed_engine_exception <500>
+
+相关分片损坏.
+
+删除该分片重建即可。
+4 mapper_parsing_exception <400>
+
+存在字段格式不正确，与mapping不匹配。
+
+检查文档字段格式，格式不正确有两种情况，其一是格式与mapping不匹配，其二是对字符串而言，可能字符非法。
+5 index_not_found_exception <404>
+
+索引不存在。
+
+建立索引。
+6 Result window is too large, from + size must be less than or equal to: [10000] but was [10000000].
+
+result window的值默认为10000，比实际需求的小，故而报错。
+
+两个方法：其一，在elasticsearch.yml中设置index.max_result_window，也可以直接修改某索引的settings：
+
+curl -XPUT http://127.0.0.1:9200/indexname/_settings -d '{ "index" : { "max_result_window" : 100000000}}'
+
+其二，使用scroll api。
+复制代码
+
+POST /twitter/tweet/_search?scroll=1m
+{
+    "size": 100,
+    "query": {
+        "match" : {
+            "title" : "elasticsearch"
+        }
+    }
+}
+
+复制代码
+
+从服务器响应获取scroll_id，然后后面批次的结果可通过循环使用下面语句得到：
+
+POST  /_search/scroll 
+{
+    "scroll" : "1m", 
+    "scroll_id" : "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAAD4WYm9laVYtZndUQlNsdDcwakFMNjU1QQ==" 
+}
+
+关于scroll api，可参看：https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-scroll.html
+7 illegal_argument_exception: number of documents in the index cannot exceed 2147483519 <400>
+
+分片上文档数达到20亿上限，无法插入新文档。
+
+重建索引，增加分片；也可以增加节点。
+8 action_request_validation_exception: Validation Failed:1:no requests added <400>
+
+这个错误一般出现在bulk入库时，是格式不对，每行数据后面都得回车换行，最后一行后要跟空行。
+
+修改格式就可以重新bulk了。
+9 No Marvel Data Found (marvel error)
+
+一般是人为删除（比如在sense插件里执行删除命令）marvel数据，导致marvel采集出错（删除了半天数据，另外半天数据将无法正常采集），不能统计；对于这种情况，等第二天marvel就可以正常使用了。
+
+也有可能是9300端口被占用，marvel默认使用9300端口；对于这种情况，找到9300端口占用进程，kill掉，重启kibana即可。
+10 Bad Request, you must reconsidered your request. <400>
+
+一般是数据格式不对。
+11 Invalid numeric value: Leading zeroes not allowed\n <400>
+
+这种情况是整数类型字段格式不正确，比如一个整数等于0000。检查每个整数字段的数据生成即可。
+12 #Deprecation: query malformed, empty clause found at [9:9] 
+
+查询语句不合法，里面含有空大括号。
+13 query：string_index_out_of_bounds_exception
+
+查询数据时，曾遇到这个问题。后来发现是http请求头格式不对，url里多了一个斜杠，却报了这个错误，特此记录。
+14 failed to obtain node locks
+
+在同一个节点（linux系统）上启动多个elasticsearch时出现failed to obtain node locks错误，启动失败.

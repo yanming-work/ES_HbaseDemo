@@ -1,0 +1,77 @@
+server:
+  port: 9443
+  session-timeout: 30  
+  tomcat.max-threads: 0  
+  tomcat.uri-encoding: UTF-8 
+  #支持https请求
+  ssl: 
+      key-store: classpath:keys/test.keystore
+      key-store-password: testhttps
+      keyStoreType: PKCS12
+      keyAlias: test
+     
+spring:
+    http:
+        encoding:
+          force: true
+          charset: UTF-8
+          enabled: true
+    data:
+         elasticsearch: 
+             cluster-name: elasticsearch
+             #cluster-nodes: 192.168.1.5:9300 #配置ES节点信息，多个用逗号分隔，如果没有指定则启动ClientNode
+             host: 192.168.1.5
+             port: 9300
+             pool: 5
+             #默认值10000，如果要加大需要修改配置文件index.max_result_window参数来增大结果窗口大小。
+             max-result-window: 10000
+         hbase:
+              master: 192.168.1.5:60000
+              zookeeper:
+                quorum: 192.168.1.5,192.168.1.6,192.168.1.7
+                property:
+                  clientPort: 2181
+                  
+             
+    #时间戳统一转换
+    jackson: 
+        date-format: yyyy-MM-dd HH:mm:ss
+        time-zone: GMT+8
+    cache:
+       type: REDIS
+       cache-names: redis_cache , ehcache #缓存的名字(可以不指定)
+       redis:
+         time-to-live: 60000  #很重要，缓存的有效时间，以便缓存的过期（单位为毫秒）
+    #redis缓存
+    redis:
+         #Redis数据库索引（默认为0）
+        database: 1
+        # Redis服务器地址
+        host: 192.168.1.151
+        # Redis服务器连接端口
+        port: 6379
+        # Redis服务器连接密码（默认为空）
+        password: msaredis
+        jedis:
+           pool:
+             #连接池最大连接数（使用负值表示没有限制）
+             max-active: 8
+             #连接池最大阻塞等待时间（使用负值表示没有限制）
+             max-wait: -1
+             #连接池中的最大空闲连接
+             max-idle: 8
+             #连接池中的最小空闲连接
+             min-idle: 0
+         #连接超时时间（毫秒）
+        timeout: 10000
+    #thymeleaf模板引擎，后缀为html
+    thymeleaf:
+        mode: HTML5  
+        encoding: utf-8  
+        servlet.content-type: text/html  
+        #（缓存要关闭，要不然有时候会看不到我们想要的东西）  
+        cache: false
+        prefix: classpath:/html/templates/
+        check-template-location: true  
+        suffix: .html  
+  
